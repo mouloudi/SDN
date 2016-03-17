@@ -8,3 +8,5 @@ V3 Changelog :
 	to all opened sockets).
 - Auto close previous and remaining sockets (may happen when the daemon is 
 	force-closed)
+
+Run this script as root for better control.
