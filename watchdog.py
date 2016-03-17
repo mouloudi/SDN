@@ -10,6 +10,8 @@ V3 Changelog :
 	to all opened sockets).
 - Auto close previous and remaining sockets (may happen when the daemon is 
 	force-closed)
+
+Run this script as root for better control.
 '''
 
 import socket
@@ -19,8 +21,16 @@ import json
 
 from thread import *
 
+configFile = "/etc/watchdog.conf"
+
+if not os.path.isfile(configFile) :
+	print "No configuration file found in "+configFile
+	sys.exit()
+
+
+
 config = {}
-execfile("/etc/watchdog.conf",config)
+execfile(configFile,config)
 DEBUG = config["DEBUG"]
 
 for arg in sys.argv :
