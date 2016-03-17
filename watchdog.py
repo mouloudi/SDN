@@ -20,7 +20,7 @@ import json
 from thread import *
 
 config = {}
-execfile("/tmp/wd.conf",config)
+execfile("/etc/watchdog.conf",config)
 DEBUG = config["DEBUG"]
 
 for arg in sys.argv :
