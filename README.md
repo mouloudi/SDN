@@ -66,11 +66,13 @@ You can omit one or more events if you don't need them.
 
 
 The structure of the tar-ball will looks like :
+```
 |-- lifecycle.json
 |-- install.sh
 |-- configure.sh
 |-- start.sh
 |-- terminate.sh
+```
 
 Obviously, it could also contains one or more packages that will be installed
 with a dpkg command available in the "install.sh" file.
