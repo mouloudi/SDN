@@ -11,7 +11,7 @@ The VNF Manager is composed by two daemons :
 an archive that contains scripts and all information required to run a
 VNF.
 
-These daemons can be executed simultaneously thanks to "executor.sh"
+These daemons can be executed simultaneously thanks to *executor.sh*
 included in this repository. 
 Just run it as root for a better control.
 
