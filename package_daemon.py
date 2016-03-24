@@ -23,6 +23,9 @@ def make_executable(path):
 
 #Return an array filled with names of the vnf packages (available at config["VNFPKGDIR"]+)
 def GetVNFPackageNames() :
+	if not os.path.exists(config["VNFPKGDIR"]):
+		os.makedirs(config["VNFPKGDIR"])
+
 	names = []
 	for vnfname in os.listdir(config["VNFPKGDIR"]):
 		names.append(vnfname)
