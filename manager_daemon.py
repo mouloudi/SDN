@@ -14,73 +14,8 @@ V3 Changelog :
 Run this script as root for better control.
 '''
 
-import socket
-import subprocess
-import sys, os
-import json
-
-from thread import *
-
-configFile = "/etc/watchdog.conf"
-
-if not os.path.isfile(configFile) :
-	print "No configuration file found in "+configFile
-	sys.exit()
-
-
-
-config = {}
-execfile(configFile,config)
-DEBUG = config["DEBUG"]
-
-for arg in sys.argv :
-	if arg == "-debug" :
-		DEBUG = True
-
-
-#Debugging
-lastlineerased = False
-def debug(msg, colorset = 0, progress=False) :
-	global lastlineerased
-
-	if (colorset == 1) : #Error
-		msg = hilite(msg, 31, True)
-	elif (colorset == 2) : #Status
-		msg = hilite(msg, 32, True)	
-	elif (colorset == 3) : #Receiving file progression
-		msg = hilite(msg, 33, False)	
-
-	if (DEBUG) :
-		if (progress) :
-			lastlineerased = True
-			CURSOR_UP_ONE = '\x1b[1A'
-			ERASE_LINE = '\x1b[2K'
-			print(CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE)
-		
-		print msg
-
-#Coloring shell
-def hilite(string, colorid, bold):
-	attr = []
-	attr.append(str(colorid))
-
-	if bold:
-		attr.append('1')
-
-	return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
-
-#WatchingDog the process
-def watchdog():
-	if not config["PTW"] :
-		debug("ERROR. Unknown process name to watchdog. Quiting !", colorset=1)
-
-	try :
-		data = subprocess.check_output(['pgrep', config["PTW"]])
-		return True
-	except :
-		return False
-
-
+#Basics scripts and importation
+execfile("basics.py")
 
 
 def processData(packet):
@@ -136,7 +71,7 @@ def processData(packet):
 	if inst == 0x01 : 
 		debug("INSTRUCTION : Status", colorset=2)
 
-		if watchdog() :
+		if checkstatus(config["PTW"]) :
 			reply = "RUNNING"
 		else :
 			reply = "DOWN"
@@ -231,7 +166,7 @@ def multiplesocket(connection) :
 #Here we finally start !
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-sock.bind(('', config["PORTWD"]))
+sock.bind(('', config["PORTVM"]))
 sock.listen(config["QUEUEDCNXS"])
 
 while True:
