@@ -122,18 +122,19 @@ class SimpleSwitch(app_manager.RyuApp):
             print "Paquet non IP. Rejete"
             return
 
+
         iphdr = pkt.get_protocol(ipv4.ipv4)
+
         #Paquet non destine a l'IP Virtuelle
         if not iphdr or (iphdr and iphdr.dst != self.virtual_ip) :
             return
       
         
-        # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = msg.in_port
 
         #On prepare le terrain pour rediriger le trafic vers la bonne GW
         currentGW = self.gateways[self.index % len(self.gateways)]
-        #self.index = self.index + 1
+        self.index = self.index + 1
 
         if currentGW["mac"] in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][currentGW["mac"]]
@@ -149,18 +150,10 @@ class SimpleSwitch(app_manager.RyuApp):
         '''
             Paquet entrant vers la gateway. 
         '''
-        #On modifie le header du paquet pour que la GW sache qu'il lui est destine
-        '''actions = [datapath.ofproto_parser.OFPActionSetDlDst(dl_addr=currentGW["mac"]),
-                   datapath.ofproto_parser.OFPActionSetNwDst(nw_addr=currentGW["ip"]),
-                   datapath.ofproto_parser.OFPActionOutput(out_port)]'''
-
         actions = [datapath.ofproto_parser.OFPActionSetDlDst(dl_addr= haddr_to_bin(currentGW["mac"]) ),
                     datapath.ofproto_parser.OFPActionSetNwDst(nw_addr= self.ipv4_to_int(currentGW["ip"])),
                     datapath.ofproto_parser.OFPActionOutput(out_port)]
         
-        '''  1.3 -> actions = [datapath.ofproto_parser.OFPActionSetField(eth_dst=currentGW["mac"]),datapath.ofproto_parser.OFPActionSetField(ipv4_dst=currentGW["ip"]), datapath.ofproto_parser.OFPActionOutput(out_port) ]'''
-
-        # install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             self.add_flow(datapath, msg.in_port, self.virtual_mac, actions)
 
@@ -176,14 +169,9 @@ class SimpleSwitch(app_manager.RyuApp):
         '''
             Paquet sortant depuis la gateway. 
         '''
-        #On modifie le header du paquet pour que la SP pense que c'est l'IP Virtuelle qui a repondu.
-        #(Pour que la correspondance socket puisse se faire)
         actions = [datapath.ofproto_parser.OFPActionSetDlSrc(dl_addr= haddr_to_bin(self.virtual_mac)),
                    datapath.ofproto_parser.OFPActionSetNwSrc(nw_addr= self.ipv4_to_int(self.virtual_ip)),
                    datapath.ofproto_parser.OFPActionOutput(msg.in_port)]
-        #actions = [datapath.ofproto_parser.OFPActionOutput(msg.in_port)]
-
-        '''1.3 actions = [datapath.ofproto_parser.OFPActionSetField(eth_src=self.virtual_mac), datapath.ofproto_parser.OFPActionSetField(ipv4_src=self.virtual_ip), datapath.ofproto_parser.OFPActionOutput(msg.in_port)] '''
 
         if out_port != ofproto.OFPP_FLOOD:
             self.add_flow(datapath, out_port, src, actions)
