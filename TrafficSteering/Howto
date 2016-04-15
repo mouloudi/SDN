@@ -28,4 +28,5 @@ HowTo :
 
 
 3 - (Note pour moi-même) : Pour avoir les numéros des ports OpenFlow, 
-	 se baser sur #ovs-ofctl [NomBridge]
+	 se baser sur #ovs-ofctl show [NomBridge] puis affecter les 
+	 numéros de ports à la variable self.mac_to_port.
