@@ -16,7 +16,7 @@ HowTo :
 
 
 [DANS LE CAS OÙ LA PLATEFORME EST RÉINITIALISÉE]
-** Apporter des modifications dans ts.py **
+** Apporter des modifications dans controller.py **
 
 1 − Indiquer les adresses macs des gateways (internes aux VMs) dans la variable
 	self.gateways
