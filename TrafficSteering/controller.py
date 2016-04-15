@@ -2,6 +2,7 @@
 # coding: utf-8
 """
 An OpenFlow 1.0 L2 Trafic-steering implementation.
+Stable V3 : On passe du compteur de paquet entrant au ping pour monitorer les GW
 """
 
 import logging
@@ -22,9 +23,11 @@ from ryu.lib.packet import arp
 from ryu.lib.packet import tcp
 from ryu.lib.packet import ipv4
 
+UINT32_MAX = 0xffffffff
 
-TIMEOUT_SWITCH = 5 #In seconds. Timeout after what we check about the gateway. MUST BE MORE THAN TIMEOUT_FLOWMOD
-TIMEOUT_FLOWMOD = 1 #In seconds. Timeout after what the flow is deleted and OVS check for new instructions.
+
+TIMEOUT_SWITCH = 9 #In seconds. Timeout after what we check about the gateway. MUST BE MORE THAN TIMEOUT_FLOWMOD
+TIMEOUT_FLOWMOD = 3 #In seconds. Timeout after what the flow is deleted and OVS check for new instructions.
 
 class TraficSteering(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
@@ -101,6 +104,23 @@ class TraficSteering(app_manager.RyuApp):
         if dst.lower() != self.virtual_mac.lower() :
             #print "Trame : "+str(src)+" -> "+str(dst)
 
+            #ARP Vers l'IP virtuelle ?
+            if eth.ethertype == ether.ETH_TYPE_ARP : 
+                arp_hdr = pkt.get_protocols(arp.arp)[0]
+                if arp_hdr.dst_ip == self.virtual_ip and arp_hdr.opcode == arp.ARP_REQUEST:
+                    print "Requete ARP pour l'IP Virtuelle"
+
+                    reply_pkt = self.formulate_arp_reply(arp_hdr.src_mac, arp_hdr.src_ip)
+
+                    actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
+                    out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, 
+                               in_port=msg.in_port, data=reply_pkt.data,
+                               actions=actions, buffer_id = UINT32_MAX)
+                    datapath.send_msg(out)
+
+                    return
+
+
             #Enregistrer l'activite des GW
             localindex = 0
             for gw in self.gateways :
@@ -108,7 +128,7 @@ class TraficSteering(app_manager.RyuApp):
                     self.gateways[localindex]["counter"] += 1
                     break
                 localindex += 1
-
+ 
 
             #Resolution du port sortant
             outport = ofproto.OFPP_FLOOD
