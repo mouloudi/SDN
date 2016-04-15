@@ -1,0 +1,31 @@
+HowTo : 
+
+1 − Renseigner en brut l'adresse mac/ip virtuelle dans le cache ARP au niveau de SP1
+	et indiquer qu'il faille passer par elle.
+
+	$ sudo arp -s 172.16.0.99 CA:FE:00:00:BA:BE
+	$ sudo route add -net 172.16.1.0/24 gw 172.16.0.99
+
+2 - Mettre en marche controlleur au niveau de SP1
+	$ cd ~ && PYTHONPATH=. ./bin/ryu-manager ts.py
+
+3 - Indiquer à node1 d'utiliser le controlleur de SP1 pour ovsbr2
+	$ sudo ovs-vsctl set-controller ovsbr2 tcp:ADRESSE_IP_PUBLIQUE_DE_SP1:6633
+
+
+
+
+[DANS LE CAS OÙ LA PLATEFORME EST RÉINITIALISÉE]
+** Apporter des modifications dans ts.py **
+
+1 − Indiquer les adresses macs des gateways (internes aux VMs) dans la variable
+	self.gateways
+
+2 - Indiquer les adresses macs de toutes les machines connectées a ovsbr2
+	(Y compris les gw déjà renseignées) dans la variable self.mac_to_port.
+
+	Ne pas toucher aux attributs "ip", "counter" et "ports".
+
+
+3 - (Note pour moi-même) : Pour avoir les numéros des ports OpenFlow, 
+	 se baser sur #ovs-ofctl [NomBridge]
