@@ -1,0 +1,44 @@
+Ce que je peux faire : 
+
+1 − Je renseigne en brut l'adresse mac/ip virtuelle dans le cache ARP au niveau de SP1
+	sudo arp -s 172.16.0.99 CA:FE:00:00:BA:BE
+	sudo route add -net 172.16.1.0/24 gw 172.16.0.99
+
+2 - Je mets en marche le controlleur au niveau de SP1
+	PYTHONPATH=. ./bin/ryu-manager ts.py
+
+3 - Je dis à node1 d'utiliser le controlleur de SP1 pour ovsbr2
+	sudo ovs-vsctl set-controller ovsbr2 tcp:192.168.17.203:6633
+
+4 - Le controlleur de SP1 fonctionne comme suit : 
+	* Si l'adresse mac dst = l'adresse mac virtuelle. Rerouter vers le port de la GW choisie en modifiant 
+		l'adresse mac dest pour l'associer à la GW choisie.
+	* Sinon autoriser tous les paquets à sortir :
+		selon le port associé à l'adresse mac dest déjà renseigné.
+
+	Rajouter donc une seule régle : 
+	Si paquet vient du port X à l'adresse mac dest Y -> Rediriger vers le port Z et modifier l'adresse mac dest T
+
+	Exemple : 
+	Paquet venant de 7 à l'adresse mac VIRT -> Rediriger vers 5 en rendant l'adresse mac dest GW1
+
+Ceci fonctionne sans l'apprentisage automatique des ports.
+
+
+
+# Notes
+- Sans controlleur, c'est ça : 
+	NODE1 # sudo ovs-vsctl del-controller ovsbr2
+
+	SP1# sudo route del -net 172.16.1.0/24 gw 172.16.0.99
+	SP1# sudo route add -net 172.16.1.0/24 gw 172.16.0.1
+
+- Nicolas a aussi rajouté une régle du coté gateway : 
+	GW2# sudo route add -host 172.16.0.12 dev eth1
+
+
+# A faire : 
+- Apprentisage automatique des ports associés aux @ mac.
+- Réussir à répondre à la requête ARP de l'IP virtuelle.
+- Déterminer d'une autre manière la non activité des GW
+
