@@ -24,7 +24,7 @@ from ryu.lib.packet import tcp
 from ryu.lib.packet import ipv4
 
 UINT32_MAX = 0xffffffff
-
+CONFFILE = "/etc/ts/conf.py"
 
 TIMEOUT_SWITCH = 9 #In seconds. Timeout after what we check about the gateway. MUST BE MORE THAN TIMEOUT_FLOWMOD
 TIMEOUT_FLOWMOD = 3 #In seconds. Timeout after what the flow is deleted and OVS check for new instructions.
@@ -55,21 +55,12 @@ class TraficSteering(app_manager.RyuApp):
         super(TraficSteering, self).__init__(*args, **kwargs)
 
         #Preparation
-        self.virtual_ip = "172.16.0.99"
-        self.virtual_mac = "CA:FE:00:00:BA:BE"
         self.currentGWindex = 0
-
-        #Gateways (Renseigner que les GW)
-        self.gateways = []
-        self.gateways.append({'ip':"172.16.0.1", 'mac':"00:7f:28:ff:3c:50", 'counter': 0}) #GW1
-        self.gateways.append({'ip':"172.16.0.2", 'mac':"00:34:03:b8:3a:cd", 'counter': 0}) #GW2
-
-        #Ports (Renseigner tous ceux sur le bridge. Y compris GW)
-        self.mac_to_port = []
-        self.mac_to_port.append({'mac':"00:7f:28:ff:3c:50", 'port': 5}) #GW1 - vnet1
-        self.mac_to_port.append({'mac':"00:34:03:b8:3a:cd", 'port': 6}) #GW2 - vnet4
-        self.mac_to_port.append({'mac':"00:32:b7:66:50:40", 'port': 7}) #SP1 - vnet7
-        self.mac_to_port.append({'mac':"00:85:36:08:28:2b", 'port': 8}) #SP2 - vnet9
+        if os.path.exists(CONFFILE): 
+            execfile(CONFFILE)
+        else : 
+            print "ERROR. Conf file not found. Execution aborted."
+            sys.exit(0)
 
         start_new_thread(self.checkStatus ,())
 
