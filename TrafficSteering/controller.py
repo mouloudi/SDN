@@ -1,22 +1,7 @@
-# VERSION QUI MARCHE BIEN ... Miracle. Peut etre parce qu'il s'agit de la v1.0 et que les docus ne sont pas retrocompatibles
-
-# Copyright (C) 2011 Nippon Telegraph and Telephone Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-# implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
+#!/usr/bin/env python
+# coding: utf-8
 """
-An OpenFlow 1.0 L2 learning switch implementation.
+An OpenFlow 1.0 L2 Trafic-steering implementation.
 """
 
 import logging
@@ -37,12 +22,11 @@ from ryu.lib.packet import arp
 from ryu.lib.packet import tcp
 from ryu.lib.packet import ipv4
 
-UINT32_MAX = 0xffffffff
 
-TIMEOUT_SWITCH = 5 #In seconds. Timeout after what we switch the gateway. MUST BE MORE THAN TIMEOUT_FLOWMOD
+TIMEOUT_SWITCH = 5 #In seconds. Timeout after what we check about the gateway. MUST BE MORE THAN TIMEOUT_FLOWMOD
 TIMEOUT_FLOWMOD = 1 #In seconds. Timeout after what the flow is deleted and OVS check for new instructions.
 
-class SimpleSwitch(app_manager.RyuApp):
+class TraficSteering(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
 
     def checkStatus(self) : 
@@ -55,7 +39,9 @@ class SimpleSwitch(app_manager.RyuApp):
                 self.currentGWindex += 1
                 self.currentGWindex %= len(self.gateways)
                 
-                print "ON switch vers "+self.gateways[self.currentGWindex]["ip"]
+                print "/!\ Gateway switch vers "+self.gateways[self.currentGWindex]["ip"]
+            else :
+                print "RAS pour la GW choisi. Indicateur d'activite : "+str(self.gateways[self.currentGWindex]["counter"])
 
             #On remet tout a zero
             for i in range (0, len (self.gateways)) :
@@ -63,21 +49,26 @@ class SimpleSwitch(app_manager.RyuApp):
 
 
     def __init__(self, *args, **kwargs):
-        super(SimpleSwitch, self).__init__(*args, **kwargs)
-        self.mac_to_port = {}
+        super(TraficSteering, self).__init__(*args, **kwargs)
 
         #Preparation
-        self.virtual_ip = "10.0.0.5"
-        self.virtual_mac = "00:00:00:00:00:05"
+        self.virtual_ip = "172.0.16.99"
+        self.virtual_mac = "CA:FE:00:00:BA:BE"
         self.currentGWindex = 0
 
-        #Gateways
+        #Gateways (Renseigner que les GW)
         self.gateways = []
-        self.gateways.append({'ip':"10.0.0.2", 'mac':"00:00:00:00:00:02", 'port': 2, 'counter': 0})
-        self.gateways.append({'ip':"10.0.0.3", 'mac':"00:00:00:00:00:03", 'port': 3, 'counter': 0})
-        self.gateways.append({'ip':"10.0.0.4", 'mac':"00:00:00:00:00:04", 'port': 4, 'counter': 0})
+        self.gateways.append({'ip':"172.0.16.1", 'mac':"00:6d:cd:df:be:ce", 'counter': 0}) #GW1
+        self.gateways.append({'ip':"172.0.16.2", 'mac':"00:b9:4e:c1:80:87", 'counter': 0}) #GW2
 
-        #start_new_thread(self.checkStatus ,())
+        #Ports (Renseigner tous ceux sur le bridge. Y compris GW)
+        self.mac_to_port = []
+        self.mac_to_port.append({'mac':"00:6d:cd:df:be:ce", 'port': 5}) #GW1 - vnet1
+        self.mac_to_port.append({'mac':"00:b9:4e:c1:80:87", 'port': 6}) #GW2 - vnet3
+        self.mac_to_port.append({'mac':"00:b4:16:a8:49:f9", 'port': 7}) #SP1 - vnet5
+        self.mac_to_port.append({'mac':"00:00:15:03:30:b3", 'port': 8}) #SP2 - vnet7
+
+        start_new_thread(self.checkStatus ,())
 
 
     def add_flow(self, datapath, in_port, dst, actions):
@@ -106,123 +97,67 @@ class SimpleSwitch(app_manager.RyuApp):
         dst = eth.dst
         src = eth.src
 
-        dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
+        # Autoriser tous les paquets non destines a la MAC virtuelle
+        if dst.lower() != self.virtual_mac.lower() :
+            #print "Trame : "+str(src)+" -> "+str(dst)
 
-        
-        #Dans le cas ou on fait un requete ARP a l'IP virtuelle.
-        if eth.ethertype == ether.ETH_TYPE_ARP:
-            arp_hdr = pkt.get_protocols(arp.arp)[0]
-
-            if arp_hdr.dst_ip == self.virtual_ip and arp_hdr.opcode == arp.ARP_REQUEST:
-                reply_pkt = self.formulate_arp_reply(arp_hdr.src_mac, arp_hdr.src_ip)
-
-                actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
-                out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, 
-                           in_port=msg.in_port, data=reply_pkt.data,
-                           actions=actions, buffer_id = UINT32_MAX)
-                datapath.send_msg(out)
-
-                return
-            #Il faut que les requetes ARP puissent circuler normalement
-            else : 
-                print "Requete ARP normale. On laisse passer"
-                actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
-
-                data = None
-                if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-                    data = msg.data
-
-                out = datapath.ofproto_parser.OFPPacketOut(
-                    datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
-                    actions=actions, data=data)
-                datapath.send_msg(out)
-
-                return
-
-        elif eth.ethertype != ether.ETH_TYPE_IP:
-            print "Paquet non IP. Rejete"
-            return
-
-
-        iphdr = pkt.get_protocol(ipv4.ipv4)
-
-        #Paquet non IP. Je laisse tomber
-        if not iphdr :
-            return
-        #Paquet non destine a l'IP Virtuelle. On traite pas mais on log
-        #quand meme. (Pour determiner l'activite des GW dans le temps)
-        elif iphdr and iphdr.dst != self.virtual_ip :
+            #Enregistrer l'activite des GW
             localindex = 0
-
             for gw in self.gateways :
-                if iphdr.src == gw["ip"] :
+                if src == gw["mac"] :
                     self.gateways[localindex]["counter"] += 1
                     break
-
                 localindex += 1
+
+
+            #Resolution du port sortant
+            outport = ofproto.OFPP_FLOOD
+            for machine in self.mac_to_port :
+                if machine["mac"] == dst :
+                    outport = machine["port"]
+                    break
+
+            actions = [datapath.ofproto_parser.OFPActionOutput(outport)]
+
+            data = None
+            if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+                data = msg.data
+
+            out = datapath.ofproto_parser.OFPPacketOut(
+                datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
+                actions=actions, data=data)
+            datapath.send_msg(out)
+
             return
-        
 
+        else : 
+            #On redirige le trafic vers la bonne GW
+            currentGW = self.gateways[self.currentGWindex]
 
+            for gw in self.mac_to_port :
+                if gw["mac"] == currentGW["mac"] :
+                    outport = gw["port"]
+                    break
 
-        #Tout va bien, on peut maintenant commencer
-        self.mac_to_port[dpid][src] = msg.in_port
+            if not outport : 
+                print "ERROR. No port found for the choosen gateway"
+                return
 
-        #On prepare le terrain pour rediriger le trafic vers la bonne GW
-        currentGW = self.gateways[self.currentGWindex]
+            print ">>> GW choisie "+str(currentGW["mac"])+" ("+currentGW["ip"]+") - port : "+str(outport)
 
-        if currentGW["mac"] in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][currentGW["mac"]]
-        else:
-            out_port = ofproto.OFPP_FLOOD
-
-        #DEBUG ONLY !!
-        out_port = currentGW["port"]
-
-        print ">>> GW choisie "+str(currentGW["mac"])+" ("+currentGW["ip"]+") - port : "+str(out_port)
-
-
-        '''
-            Paquet entrant vers la gateway. 
-        '''
-        actions = [datapath.ofproto_parser.OFPActionSetDlDst(dl_addr= haddr_to_bin(currentGW["mac"]) ),
-                    datapath.ofproto_parser.OFPActionSetNwDst(nw_addr= self.ipv4_to_int(currentGW["ip"])),
-                    datapath.ofproto_parser.OFPActionOutput(out_port)]
-        actions = [datapath.ofproto_parser.OFPActionSetDlDst(dl_addr= haddr_to_bin(currentGW["mac"]) ),
-                    datapath.ofproto_parser.OFPActionSetNwDst(nw_addr= self.ipv4_to_int(currentGW["ip"])),
-                    datapath.ofproto_parser.OFPActionOutput(out_port)]
-        
-        if out_port != ofproto.OFPP_FLOOD:
+            actions = [datapath.ofproto_parser.OFPActionSetDlDst(dl_addr= haddr_to_bin(currentGW["mac"])),
+                        datapath.ofproto_parser.OFPActionOutput(outport)]
+            
             self.add_flow(datapath, msg.in_port, self.virtual_mac, actions)
 
-        data = None
-        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-            data = msg.data
+            data = None
+            if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+                data = msg.data
 
-        out = datapath.ofproto_parser.OFPPacketOut(
-            datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
-            actions=actions, data=data)
-        datapath.send_msg(out)
-
-        '''
-            Paquet sortant depuis la gateway. 
-        '''
-        actions = [datapath.ofproto_parser.OFPActionSetDlSrc(dl_addr= haddr_to_bin(self.virtual_mac)),
-                   datapath.ofproto_parser.OFPActionSetNwSrc(nw_addr= self.ipv4_to_int(self.virtual_ip)),
-                   datapath.ofproto_parser.OFPActionOutput(msg.in_port)]
-
-        if out_port != ofproto.OFPP_FLOOD:
-            self.add_flow(datapath, out_port, src, actions)
-
-        data = None
-        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-            data = msg.data
-
-        out = datapath.ofproto_parser.OFPPacketOut(
-            datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
-            actions=actions, data=data)
-        datapath.send_msg(out)
+            out = datapath.ofproto_parser.OFPPacketOut(
+                datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
+                actions=actions, data=data)
+            datapath.send_msg(out)
 
         
 
@@ -268,13 +203,3 @@ class SimpleSwitch(app_manager.RyuApp):
         pkt.serialize()
 
         return pkt
-
-
-    def ipv4_to_int(self,addr):
-        ip = addr.split('.')
-        assert len(ip) == 4
-        i = 0
-        for b in ip:
-            b = int(b)
-            i = (i << 8) | b
-        return i
