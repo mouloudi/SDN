@@ -35,17 +35,20 @@ class TraficSteering(app_manager.RyuApp):
     def checkStatus(self) : 
         while True:
             time.sleep(TIMEOUT_SWITCH)
-            response = os.system("ping -c 1 " + str(self.gateways[self.currentGWindex]["ip"])+" > /dev/null 2>&1")
 
-            #Il y a un probleme
-            if response != 0 :
+            #Si apres x secondes, la currentGWindex ne s'est pas manifeste
+            #C'est qu'il doit y avoir un probleme
+            if self.gateways[self.currentGWindex]["counter"] == 0 :
                 self.currentGWindex += 1
                 self.currentGWindex %= len(self.gateways)
-
+                
                 print "/!\ Gateway switch vers "+self.gateways[self.currentGWindex]["ip"]
-            else : 
-                print "RAS pour la GW "+str(self.gateways[self.currentGWindex]["ip"])
+            else :
+                print "RAS pour la GW choisi. Indicateur d'activite : "+str(self.gateways[self.currentGWindex]["counter"])
 
+            #On remet tout a zero
+            for i in range (0, len (self.gateways)) :
+                self.gateways[i]["counter"] = 0
 
 
     def __init__(self, *args, **kwargs):
