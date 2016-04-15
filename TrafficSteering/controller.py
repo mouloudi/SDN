@@ -2,12 +2,12 @@
 # coding: utf-8
 """
 An OpenFlow 1.0 L2 Trafic-steering implementation.
-Stable V3 : On passe du compteur de paquet entrant au ping pour monitorer les GW
 """
 
 import logging
 import struct
 import time
+import os
 from thread import *
 
 from ryu.base import app_manager
@@ -35,41 +35,38 @@ class TraficSteering(app_manager.RyuApp):
     def checkStatus(self) : 
         while True:
             time.sleep(TIMEOUT_SWITCH)
+            response = os.system("ping -c 1 " + str(self.gateways[self.currentGWindex]["ip"])+" > /dev/null 2>&1")
 
-            #Si apres x secondes, la currentGWindex ne s'est pas manifeste
-            #C'est qu'il doit y avoir un probleme
-            if self.gateways[self.currentGWindex]["counter"] == 0 :
+            #Il y a un probleme
+            if response != 0 :
                 self.currentGWindex += 1
                 self.currentGWindex %= len(self.gateways)
-                
-                print "/!\ Gateway switch vers "+self.gateways[self.currentGWindex]["ip"]
-            else :
-                print "RAS pour la GW choisi. Indicateur d'activite : "+str(self.gateways[self.currentGWindex]["counter"])
 
-            #On remet tout a zero
-            for i in range (0, len (self.gateways)) :
-                self.gateways[i]["counter"] = 0
+                print "/!\ Gateway switch vers "+self.gateways[self.currentGWindex]["ip"]
+            else : 
+                print "RAS pour la GW "+str(self.gateways[self.currentGWindex]["ip"])
+
 
 
     def __init__(self, *args, **kwargs):
         super(TraficSteering, self).__init__(*args, **kwargs)
 
         #Preparation
-        self.virtual_ip = "172.0.16.99"
+        self.virtual_ip = "172.16.0.99"
         self.virtual_mac = "CA:FE:00:00:BA:BE"
         self.currentGWindex = 0
 
         #Gateways (Renseigner que les GW)
         self.gateways = []
-        self.gateways.append({'ip':"172.0.16.1", 'mac':"00:6d:cd:df:be:ce", 'counter': 0}) #GW1
-        self.gateways.append({'ip':"172.0.16.2", 'mac':"00:b9:4e:c1:80:87", 'counter': 0}) #GW2
+        self.gateways.append({'ip':"172.16.0.1", 'mac':"00:7f:28:ff:3c:50", 'counter': 0}) #GW1
+        self.gateways.append({'ip':"172.16.0.2", 'mac':"00:34:03:b8:3a:cd", 'counter': 0}) #GW2
 
         #Ports (Renseigner tous ceux sur le bridge. Y compris GW)
         self.mac_to_port = []
-        self.mac_to_port.append({'mac':"00:6d:cd:df:be:ce", 'port': 5}) #GW1 - vnet1
-        self.mac_to_port.append({'mac':"00:b9:4e:c1:80:87", 'port': 6}) #GW2 - vnet3
-        self.mac_to_port.append({'mac':"00:b4:16:a8:49:f9", 'port': 7}) #SP1 - vnet5
-        self.mac_to_port.append({'mac':"00:00:15:03:30:b3", 'port': 8}) #SP2 - vnet7
+        self.mac_to_port.append({'mac':"00:7f:28:ff:3c:50", 'port': 5}) #GW1 - vnet1
+        self.mac_to_port.append({'mac':"00:34:03:b8:3a:cd", 'port': 6}) #GW2 - vnet4
+        self.mac_to_port.append({'mac':"00:32:b7:66:50:40", 'port': 7}) #SP1 - vnet7
+        self.mac_to_port.append({'mac':"00:85:36:08:28:2b", 'port': 8}) #SP2 - vnet9
 
         start_new_thread(self.checkStatus ,())
 
@@ -103,23 +100,6 @@ class TraficSteering(app_manager.RyuApp):
         # Autoriser tous les paquets non destines a la MAC virtuelle
         if dst.lower() != self.virtual_mac.lower() :
             #print "Trame : "+str(src)+" -> "+str(dst)
-
-            #ARP Vers l'IP virtuelle ?
-            if eth.ethertype == ether.ETH_TYPE_ARP : 
-                arp_hdr = pkt.get_protocols(arp.arp)[0]
-                if arp_hdr.dst_ip == self.virtual_ip and arp_hdr.opcode == arp.ARP_REQUEST:
-                    print "Requete ARP pour l'IP Virtuelle"
-
-                    reply_pkt = self.formulate_arp_reply(arp_hdr.src_mac, arp_hdr.src_ip)
-
-                    actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
-                    out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, 
-                               in_port=msg.in_port, data=reply_pkt.data,
-                               actions=actions, buffer_id = UINT32_MAX)
-                    datapath.send_msg(out)
-
-                    return
-
 
             #Enregistrer l'activite des GW
             localindex = 0
