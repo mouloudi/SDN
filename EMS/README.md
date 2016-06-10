@@ -1,6 +1,6 @@
 # Introduction
 
-The VNF Manager is composed by two daemons : 
+The EMS is composed by two daemons : 
 
 - A main daemon that receives basic requests and could be asked :
     * About the status of a process (which is in fact the VNF)
